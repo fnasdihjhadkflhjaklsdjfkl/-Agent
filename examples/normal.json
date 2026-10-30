@@ -1,0 +1,1 @@
+{"material_ids":["M01"],"materials":[{"id":"M01","title":"新品介绍","content":"正常内容","duration":30,"date":"2026-11-01","requested_time":"18:00"}],"rules":{"blocked_words":["违规"]},"slots":["18:00","19:00"],"schedule":{"2026-11-01":["18:00"]}}

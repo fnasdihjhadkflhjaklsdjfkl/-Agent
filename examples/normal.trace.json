@@ -1,0 +1,92 @@
+{
+  "status": "complete",
+  "results": [
+    {
+      "material_id": "M01",
+      "review_status": "pass",
+      "risk_reasons": [],
+      "pending_confirmation": [
+        "requested_time_occupied",
+        "confirm_alternative_slot"
+      ],
+      "suggested_slot": "19:00",
+      "save_status": "saved",
+      "draft_id": "D001"
+    }
+  ],
+  "trace": [
+    {
+      "step": 1,
+      "tool": "read_material",
+      "params": {
+        "material_id": "M01"
+      },
+      "result": {
+        "ok": true,
+        "material": {
+          "id": "M01",
+          "title": "新品介绍",
+          "content": "正常内容",
+          "duration": 30,
+          "date": "2026-11-01",
+          "requested_time": "18:00"
+        },
+        "error": null
+      }
+    },
+    {
+      "step": 2,
+      "tool": "check_rules",
+      "params": {
+        "material": {
+          "id": "M01",
+          "title": "新品介绍",
+          "content": "正常内容",
+          "duration": 30,
+          "date": "2026-11-01",
+          "requested_time": "18:00"
+        }
+      },
+      "result": {
+        "ok": true,
+        "status": "pass",
+        "missing": [],
+        "risks": []
+      }
+    },
+    {
+      "step": 3,
+      "tool": "query_slots",
+      "params": {
+        "date": "2026-11-01",
+        "requested": "18:00",
+        "duration": 30
+      },
+      "result": {
+        "ok": true,
+        "requested": "18:00",
+        "occupied": true,
+        "available": [
+          "19:00"
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "save_draft",
+      "params": {
+        "draft": {
+          "material_id": "M01",
+          "date": "2026-11-01",
+          "slot": "19:00"
+        }
+      },
+      "result": {
+        "ok": true,
+        "status": "saved",
+        "draft_id": "D001"
+      }
+    }
+  ],
+  "tool_calls": 4
+}
