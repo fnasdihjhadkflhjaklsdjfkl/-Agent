@@ -1,0 +1,1166 @@
+---PAGE 1---
+Hierarchical dominant-modality Selection with Shapley Routing
+Mixture-of-Experts
+Huafei Deng, Xuecheng Zou, and Li Zhang
+School of Future Science and Engineering,Soochow University
+{20245258046,20245258029, 20245258048}@stu.suda.edu.cn
+Abstract
+Multimodal Sentiment Analysis (MSA) faces
+significant challenges when dealing with in-
+complete data, as the quality and availabil-
+ity of different modalities dynamically vary
+across samples.Previous methods focus on
+equally treating the contribution of each modal-
+ity or statically using text as the domi-
+nant modality to conduct interaction, which
+neglects the situation where each modal-
+ity may become dominant. We propose a
+novel Hierarchical dominant-modality Selec-
+tion with Shapley Routing Mixture-of-Experts
+framework(HS-MoE) to achieve robust MSA
+under arbitrary modality-missing scenarios.
+The proposed HSMoE features a Hierarchi-
+cal Dominant-modality Selection and Shapley
+Routing Mixture-of-Experts, which dynami-
+cally adjusts the dominant modality to enhance
+model robustness across diverse noisy condi-
+tions. Comprehensive experiments on popu-
+lar benchmark datasets (MOSI, MOSEI, and
+SIMS) demonstrate that HierarchicalShapley-
+MoE consistently outperforms existing base-
+lines across varying missing rates and evalua-
+tion metrics.
+1 Introduction
+Multimodal Sentiment Analysis (MSA) seeks to
+achieve a comprehensive understanding of human
+affective states by synthesizing heterogeneous data
+sources, specifically textual, acoustic, and visual
+modalities(Kaur and Kautish, 2022; Zeng et al.,
+2021). Distinct from unimodal approaches, MSA
+leverages the complementary information inherent
+across these modalities, thereby significantly bol-
+stering the accuracy and robustness of sentiment
+recognition. Recently, MSA has exhibited broad
+potential in diverse real-world applications, rang-
+ing from healthcare monitoring(Ma et al., 2025)
+and human-computer interaction(Wu et al., 2026)
+to online education(Immadisetty et al., 2025). How-
+ever, practical deployment is frequently hindered
+I‘m so glad you’re here！
+我太高兴你来了！
+I‘m so glad you’re here！
+我太高兴你来了！
+V
+：
+Neutral (0.00)
+A
+：
+Positive (0.52)
+T
+：
+Positive (0.90)
+M:Positive (0.85)
+T
+：
+Neutral (0.00)
+M:Negative (-0.55)
+Uni prediction
+Samples
+Mult prediction
+I will return，and live without shame.
+我会回去，然后毫无愧疚的活下去。
+Figure 1: The figure illustrates that the dominant modal-
+ity determines the final sentiment when other modalities
+are missing or conflicting. For instance, when text is
+missing (right), the prediction shifts drastically based
+on audio-visual cues.
+by incomplete or missing modality data due to fac-
+tors such as sensor malfunctions, automatic speech
+recognition errors, network latency, or privacy con-
+straints(Chen et al., 2025; Xu et al., 2026). These
+scenarios of arbitrary modality missingness are
+ubiquitous in real-world environments and pose
+a severe challenge to the performance of existing
+models.
+Existing research on missing modalities primar-
+ily falls into two categories. Equality-based fusion
+methods (Yu et al., 2021; Sun et al., 2022; Huang
+et al., 2024) operate on the assumption that each
+modality contributes equally to the final prediction,
+thereby employing a symmetric fusion strategy.
+Conversely, static dominance methods (Wang et al.,
+2023a; Zhang et al., 2023, 2024; Shi et al., 2025;
+Zhu et al., 2025; Li et al., 2025; Yang et al., 2026)
+posit text as a fixed dominant modality, utilizing it
+to guide the interaction and fusion of other modal-
+ities. However, as illustrated in Fig. 1, data noise
+---PAGE 2---
+often dictates that the dominant role shifts dynami-
+cally among visual, textual, or acoustic modalities.
+Consequently, equality-based methods struggle to
+adapt to such scenarios, as they overlook the inher-
+ent discrepancies in modality importance. Mean-
+while, static dominance approaches, by rigidly an-
+choring on text, risk diluting the model’s focus with
+noise from secondary modalities when non-textual
+inputs are actually dominant.
+In this paper, we propose the Hierarchical
+dominant-modality Selection with Shapley
+Routing Mixture-of-Experts framework(HS-MoE).
+The proposed framework dynamically identifies
+the dominant modality and adaptively adjusts the
+contribution of each modality on a per-sample
+basis, thereby enhancing model performance and
+enabling adaptation to more complex and diverse
+scenarios. Specifically, HS-MoE first employs
+multimodal encoders to extract semantic features
+from the textual, visual, and auditory modalities.
+Subsequently, the Hierarchical Dominant-modality
+Selection (HDS) mechanism is leveraged to
+distill affective cues and determine the dominant
+modality for each sample. Building upon the
+identified dominant modality, we devise a Shapley
+Routing Mixture-of-Experts(SRMoE) strategy
+grounded in cooperative game theory, which
+interpretable cross-modal interaction among
+seven heterogeneous experts. Finally,HSMoE
+predicts the sentiment scores through a multilayer
+perceptron. Our contributions are summarized as
+follows:
+• We propose a Hierarchical Dominant-
+modality Selection mechanism that dynami-
+cally identifies the most informative modality
+through a confidence assessment. This design
+enables robust adaptation to arbitrary random
+modality missingness without relying on
+single-criterion integrity checks.
+• We introduce a Shapley Routing Mixture-of-
+Experts grounded in cooperative game theory,
+which partitions the expert coalition based
+on the identified dominant modality and com-
+putes contribution values via a hybrid exact–
+approximate Shapley estimation.
+• Extensive experiments on three standard
+multimodal sentiment analysis benchmarks
+(MOSI, MOSEI, and SIMS) demonstrate that
+our HSMoE framework achieves competitive
+or superior performance compared to state-of-
+the-art baselines across a wide spectrum of
+missing rates (0%–90%) in most scenarios.
+2 Related Work
+2.1 Multimodal Sentiment Analysis
+Multimodal Sentiment Analysis (MSA) aims to
+understand and analyze human emotions by lever-
+aging multiple distinct modalities. Currently, main-
+stream MSA research (Tsai et al., 2019; Zadeh
+et al., 2018a) primarily focuses on designing so-
+phisticated fusion paradigms and interaction mech-
+anisms to enhance MSA performance. However,
+these methods rely heavily on complete modality
+information, rendering them less feasible in prac-
+tical applications. To address the issue of missing
+modalities in MSA, there are currently two main
+approaches:generative methods (Luo et al., 2023;
+Lian et al., 2022; Wang et al., 2023b) attempt to re-
+construct the features and semantic information of
+missing modalities by leveraging the distribution of
+available ones.; and joint learning methods (Wang
+et al., 2020; Zhao et al., 2021; Zeng et al., 2022;
+Yuan et al., 2024; Liu et al., 2024)focus on con-
+structing coherent multimodal joint representations
+based on inter-modal correlations.
+2.2 Dominant Modality
+Existing research on modality fusion generally fol-
+lows two distinct paradigms. Equality-based fu-
+sion methods operate on the assumption that each
+modality contributes equally to the final predic-
+tion, employing symmetric strategies to model bidi-
+rectional relationships. Early approaches utilized
+tensor-based (Zadeh et al., 2017; Liu et al., 2018),
+LSTM-based (Zadeh et al., 2018a), and MLP-based
+(Sun et al., 2022) architectures to capture inter-
+modal commonalities. These were later superseded
+by transformer-based frameworks like MuLT (Tsai
+et al., 2019), which align cross-modal sequences,
+and subspace projection methods like MISA (Haz-
+arika et al., 2020) that disentangle shared and pri-
+vate features. Despite these advancements, such
+symmetric methods often neglect the inherent dis-
+crepancies in modality importance. In contrast,
+static dominance methods posit that the textual
+modality should act as the fixed anchor, guiding
+the integration of acoustic and visual cues. Rep-
+resentative works leverage transformers to inject
+non-verbal information into text representations
+(Han et al., 2021; Wang et al., 2023a; Li et al.,
+---PAGE 3---
+HDS
+I'm so glad
+you 're here!
+我太
+高兴
+你来了！
+𝐻𝑣
+𝐻𝑎
+𝐻𝑡
+Modality
+Perceptive
+Interaction
+Confidence
+Aware
+Selection
+I'm so glad
+you 're here!
+我太
+高兴
+你来了！
+𝑋𝑡
+𝑋𝑎
+𝑋𝑣
+𝑇𝑒𝑥𝑡
+𝐴𝑢𝑑𝑖𝑜
+Random
+missing
+Random
+missing
+Random
+missing
+𝑉𝑖𝑠𝑢𝑎𝑙
+Visual
+Encoder
+Audio
+Encoder
+Text
+Encoder
+𝐻𝑡
+𝐻𝑣
+𝐻𝑎
+𝑠𝑚
+Shapley
+router
+𝑦
+LSP
+𝐸2𝑎
+𝐸1
+𝑎
+…
+𝐸1
+𝑑
+𝐸2𝑑
+… …
+…
+Laux
+𝐻1
+𝑑
+𝐻2
+𝑑
+𝐻1
+a
+𝐻2
+a
+𝐻𝑣
+𝐻𝑎
+𝐻𝑡
+SRMoE
+𝐻𝑡
+𝐻𝑣
+𝐻𝑎
+𝑋𝑣′
+𝑋a′
+𝑋t′
+LER
+Transformer Layer
+Transformer Layer
+ER
+Multimodal Input
+Figure 2: my framework
+2025; Yang et al., 2026) or enhance pre-trained
+language models via multimodal injection (Wang
+et al., 2022). To further mitigate noise and con-
+flicts, recent studies have incorporated mutual in-
+formation maximization (Han et al., 2021), adap-
+tive representation learning (Zhang et al., 2023),
+and text-centric proxy-driven mechanisms (Zhang
+et al., 2024; Zhu et al., 2025). However, by rigidly
+assigning dominance to text, these methods may
+fail to adapt when visual or acoustic signals be-
+come the primary carriers of sentiment in noisy
+environments.
+3 Methodology
+3.1 Overall Architecture
+As shown in Figure 2, which shows the overall
+workflow of HSMoE framework.Specifically,the
+framework first employs modality-specific en-
+coders to extract high-level semantic features. Sub-
+sequently, the HDS mechanism dynamically iden-
+tifies the dominant modality by distilling affective
+cues. Guided by this dominant modality, the SR-
+MoE utilizes Shapley value-based routing to ag-
+gregate outputs from seven heterogeneous experts,
+effectively modeling complex multimodal depen-
+dencies. Finally, the aggregated representation is
+fed into a Multilayer Perceptron (MLP) to regress
+the final sentiment score.
+3.2 Multimodal Input
+To simulate scenarios with missing data, we ap-
+plied a random missing strategy with varying pro-
+portions (ranging from 0% to 100%) to the MOSI,
+MOSEI, and SIMS datasets. Specifically, zero-
+padding was applied to the erased visual and au-
+dio modalities and the language modality was pop-
+ulated with [UNK] tokens to indicate unknown
+words in BERT (Devlin et al., 2019).
+For feature extraction, we employ BERT (De-
+vlin et al., 2019) to encode textual inputs, Li-
+brosa (McFee et al., 2015) to extract acoustic fea-
+tures, and OpenFace (Baltrusaitis et al., 2018) to ex-
+tract visual features. The pre-processed inputs are
+initially represented as sequences Xm ∈ RTm×dm,
+where m ∈ { t, v, a} denotes the modality type
+(t for text, v for visual, and a for audio). Subse-
+quently, we apply a random missing strategy to
+simulate incomplete modality scenarios, yielding
+corrupted sequences Hm ∈ RTm×dm as the final
+input representations.
+3.3 hierarchical dominant-modality selection
+Unlike conventional Mixture-of-Experts that
+rely solely on input features for routing, our
+Hierarchical Dominant-modality Selection (HDS)
+explicitly decouples the representation learning
+from the decision-making process. As illustrated in
+Figure 2, the architecture is modularized into two
+sequential stages: a Modality-Perceptive Interac-
+tion module that refines features and captures cross-
+modal dependencies, followed by a Confidence-
+Aware Selection module that dynamically evalu-
+ates the reliability of each modality to determine
+the dominant expert.
+Modality-Perceptive Interaction Module Let
+Hm denote the input features for modality m ∈
+---PAGE 4---
+{t, v, a}, which are obtained by projecting the raw
+(or missing-masked) inputs and adding positional
+embeddings. We apply parallel self-attention mech-
+anisms to denoise and enhance intra-modal depen-
+dencies. For each modality, this is formulated as:
+H h
+m, pm = SelfAttnm(Hm) (1)
+where H h
+m denotes the enhanced sequence, and
+pm ∈ Rd is the pooled global feature vector sum-
+marizing the modality content.
+To capture the contextual relationships, we com-
+pute a bidirectional cross-attention matrix M ∈
+R3×3 based on the enhanced features. Each ele-
+ment Mij i, j ∈ { t, v, a}quantifies the attention
+intensity of modality i towards modality j. This
+matrix serves as a structural prior for the subse-
+quent selection:
+M = Stack
+
+CrossAttn(H h
+i , Hh
+j )
+
+(2)
+Confidence-Aware Selection Module Instead
+of relying on a single heuristic, we propose a
+multi-perspective confidence fusion strategy. We
+evaluate each modality from three distinct per-
+spectives:Local Confidence,Global Confidence and
+Consistency Confidence.The final dominance score
+sm for modality m is a learnable weighted sum of
+these confidences:
+sm = λ1 · Cl(pm) + λ2 · Cg(M ) + λ3 · Ccons(pall)
+(3)
+where λ1, λ2, λ3 are learnable fusion coeffi-
+cients.we select the modality with the highest prob-
+ability as the dominant modality m∗.
+3.4 Shapley Routing Mixture-of-Experts
+In traditional Multimodal Mixture-of-Experts, rout-
+ing is often performed via a naive softmax gate,
+which fails to account for the complex interac-
+tions and redundancies among experts. While
+Shapley Value from cooperative game theory pro-
+vides an optimal solution for credit assignment,
+its exact computation suffers from factorial com-
+plexity.we propose a Shapley Routing Mixture-of-
+Experts(SRMoE) mechanism. This strategy lever-
+ages the dominant modality identified by the HDS
+module to structure the expert coalition, thereby
+reducing the search space and enabling a hybrid
+exact-approximate computation of Shapley Values.
+Multimodal Expert For each expert, we em-
+ploy a standard Transformer encoder architec-
+ture. The feature representations Hm (where m ∈
+{t, v, a}), after undergoing positional encoding, are
+fed into a stack of Q identical Transformer blocks.
+Each block comprises a Multi-Head Self-Attention
+(MSA) mechanism and a Feed-Forward Network
+(FFN). Layer Normalization (LN) and residual con-
+nections are applied within each block to facilitate
+stable training. The j-th Transformer block is for-
+mulated as follows:
+H j
+m′ = MSA(LN(H j−1
+m )) + H j−1
+m (4)
+H j
+m = FFN(LN(H j
+m′)) + H j
+m′ (5)
+Consequently, the final output of the Trans-
+former expert, denoted as H Q
+m, is obtained by pro-
+cessing the input Hm through the expert network
+parameterized by θm
+T :
+Hi = Expert(Hm) (6)
+For the multimodal experts, we construct the
+input by concatenating the feature representations
+from the respective modalities to form an initial fea-
+ture matrix. This joint representation is processed
+through a stack of Q similar Transformer blocks
+to capture cross-modal interactions. Following the
+stacking layers, we apply average pooling to extract
+the final compact feature vector.
+Hybrid Shapley Value Estimation Based on
+this partition, we adopt a hybrid strategy to ap-
+proximate the Shapley Value ϕi.
+Let E = {E1, . . . , E7} denote the set of7 hetero-
+geneous experts,including three unimodal experts,
+three bimodal experts and a trimodal expert. In-
+stead of treating all experts equally, we utilize the
+dominant modality indicator m∗ ∈ {t, v, a} gener-
+ated by HDS to partitionE into the Dominant Coali-
+tion and the Auxiliary Coalition. Consequently, the
+final output as follows:
+H d
+i = DominantExpert(Hm) (7)
+H a
+j = AuxiliaryExpert(Hm) (8)
+Formally, given m∗, we define a mask vec-
+tor d ∈ { 0, 1}7 . The partition is defined as
+Cd = {Ei ∈ E | di = 1 } and Ca = {Ei ∈
+E | di = 0 }. For instance, if m∗ = Visual, then
+Cd = {Ev, Evl, Eva, Evla}.
+Since |Cdom| ≤ 4 in our setup, we compute their
+Shapley Values exactly to preserve critical infor-
+mation. The value of a subset S is evaluated by a
+---PAGE 5---
+value function v(S) :
+ϕd
+i =
+X
+S⊆Cd
+|S|!(|Cd| − |S| − 1)!
+|Cd|! [v(S∪{i})−v(S)]
+(9)
+For the auxiliary coalition, we employ Monte
+Carlo sampling to approximate ϕa
+i with lower com-
+putational cost.
+Experts fusion and prediction Based on the cal-
+culated Shapley values, we determine the final rout-
+ing weight wi for each expert Ei. The weight is
+a normalized combination guided by the coalition
+structure:
+wd
+i = ϕd
+iP
+i∈Cd ϕd
+i
+(10)
+wa
+j =
+ϕa
+jP
+j∈Ca ϕa
+j
+(11)
+Subsequently, we aggregate the outputs from all
+activated experts to form a comprehensive repre-
+sentation. Let Hi denote the output feature of the
+i-th expert. The final fused representation ˆH is
+computed via a weighted summation:
+ˆH =
+X
+i∈Cd
+wd
+i · H d
+i +
+X
+j∈Ca
+wa
+j · H a
+j (12)
+Finally, this fused feature vector is fed into a
+Multi-Layer Perceptron (MLP) consisting of two
+fully connected layers and a ReLU activation func-
+tion to output the sentiment prediction ˆy:
+ˆy = MLP( ˆH) (13)
+To ensure that the routing mechanism of the SR-
+MoE aligns with the prior knowledge provided by
+the Hierarchical Dominance Selector, we introduce
+an auxiliary loss function Laux as follows:
+Laux =
+X
+m∈{t,v,a}
+(sm − gm)2 (14)
+where sm denotes the final dominance score for
+modality m. gm represents the aggregated routing
+weight for modality m, calculated by summing the
+weights of all experts that include modality m.
+3.5 Expert Reconstruction
+We design aExpert Reconstructor(ER) R compris-
+ing two Transformer layers, specifically tailored
+to recover missing information for each modality.
+Given incomplete input features Hm, the recon-
+structor aims to approximate the original complete
+data Xm. We optimize the reconstructor by mini-
+mizing the Mean Squared Error (MSE) between the
+ground truth and the reconstructed features. The
+data reconstruction loss LDR is formulated as:
+LER = 1
+N
+X
+m∈∈{t,v,a}
+NX
+n=1
+∥xm
+n − Rm(hm
+n )∥2
+(15)
+where N represents the batch size. By minimizing
+the discrepancies between the original and recon-
+structed features, LER significantly enhances the
+model’s robustness and its ability to capture latent
+sentiment information.
+3.6 Overall Learning Objectives
+To minimize sentiment prediction error, the model
+is optimized using the L1 loss. Formally, the senti-
+ment prediction loss Lsp is defined as:
+Lsp = 1
+N
+NX
+n=1
+|ˆyn − yn| (16)
+where ˆyn is the predicted sentiment output, yn is
+the ground-truth label,Therefore, the overall loss L
+can be written as:
+L = αLaux + βLrec + γLsp (17)
+where α, β and γ are hyperparameters that balance
+the contributions of each component.
+4 Experiments and Analysis
+4.1 Datasets
+The MOSI dataset (Zadeh et al., 2016) comprises
+2,199 multimodal utterances that integrate visual,
+acoustic, and linguistic modalities. The dataset is
+partitioned into 1,284 samples for training, 229
+for validation, and 686 for testing. Each sample is
+annotated with a sentiment score ranging from -3
+(strongly negative) to +3 (strongly positive).
+The MOSEI dataset (Zadeh et al., 2018b) con-
+tains 22,856 video clips collected from YouTube.
+It is split into 16,326 clips for training, 1,871 for
+validation, and 4,659 for testing. Similar to MOSI,
+each clip is labeled with a sentiment score on a
+scale from -3 (strongly negative) to +3 (strongly
+positive).
+The SIMS dataset (Yu et al., 2020) is a Chi-
+nese multimodal sentiment corpus consisting of
+2,281 video clips extracted from various movies
+---PAGE 6---
+Table 1: Comparison of overall performance on MOSI and MOSEI under intra-modal missingness.
+Model MOSI MOSEI
+Acc-2 F1 Acc-5 Acc-7 MAE Corr Acc-2 F1 Acc-5 Acc-7 MAE Corr
+MISA 70.33/71.49 70.00/71.28 33.08 29.85 1.085 0.524 75.82/71.27 68.73/63.85 39.39 40.84 0.780 0.503
+Self-MM 69.26/70.51 67.54/66.60 34.67 29.55 1.070 0.512 77.42/73.89 72.31/68.92 45.38 44.70 0.695 0.498
+MMIM 67.06/69.14 64.04/66.65 33.77 31.30 1.077 0.507 75.89/73.32 70.32/68.72 41.74 40.75 0.739 0.489
+CENET 67.73/71.46 64.85/68.41 37.25 30.38 1.080 0.504 77.34/74.67 74.08/70.68 47.83 47.18 0.685 0.535
+TETFN 67.68/69.76 63.29/65.69 34.34 30.30 1.087 0.507 67.68/69.76 63.29/65.69 47.70 30.30 1.087 0.508
+ALMT 68.39/70.40 71.80/72.57 33.42 30.30 1.083 0.498 77.54/76.64 71.99/68.80 41.64 40.92 0.674 0.481
+LNLN 70.94/72.55 71.25/72.73 38.27 34.261.046 0.527 78.19/76.30 79.95/77.77 46.17 45.420.692 0.530
+P-RMF 71.53/72.81 71.69/72.93 38.50 34.19 1.038 0.525 78.83/78.1480.39/79.33 45.87 44.63 0.658 0.589
+HS-MoE 71.97/73.46 71.94/73.39 39.52 35.42 1.065 0.539 78.93/78.70 80.03/79.41 48.09 47.25 0.657 0.598
+Table 2: Comparison of overall performance on SIMS
+under intra-modal missingness.
+Model Acc-2 F1 Acc-3 Acc-5 MAE Corr
+MISA 72.71 66.30 56.87 31.53 0.539 0.348
+Self-MM 72.81 68.43 56.75 32.28 0.508 0.376
+MMIM 69.86 66.21 52.76 31.81 0.544 0.339
+CENET 68.13 57.90 53.17 22.29 0.589 0.107
+TETFN 73.58 68.67 56.91 33.42 0.505 0.387
+TFR-Net 68.13 58.70 52.89 26.52 0.661 0.169
+ALMT 71.85 76.21 56.47 34.16 0.509 0.372
+LNLN 72.73 79.43 57.14 34.64 0.514 0.397
+P-RMF 73.64 74.65 54.75 34.83 0.500 0.414
+HS-MoE 74.00 74.86 55.08 35.00 0.506 0.422
+and TV series. The data is divided into 1,368 sam-
+ples for training, 456 for validation, and 457 for
+testing. Each sample is manually annotated with
+a sentiment score ranging from -1 (negative) to +1
+(positive).
+4.2 Experimental Settings and Evaluation
+Criteria
+All models are built on the Pytorch (Paszke et al.,
+2017) toolbox with four NVIDIA GeForce RTX
+3090 (24GB) GPUs. The Adam optimizer (Kingma
+and Ba, 2014) is employed for network optimiza-
+tion. For MOSI, MOSEI, and SIMS, the detailed
+hyper-parameter settings are as follows: the learn-
+ing rate is set to 1 × 10−4, the batch size is 64, and
+the number of training epochs is 200. For a fair
+comparison, we re-implement the State-Of-The-
+Art (SOTA) methods and combine them with our
+experimental paradigms. All experimental results
+are averaged over multiple experiments using five
+different random seeds.
+For evaluation criteria, we report the binary clas-
+sification accuracy (Acc-2), the corresponding F1
+score, and the Mean Absolute Error (MAE). Ad-
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+40
+50
+60
+70
+80
+90F1 Score
+(a)
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+40
+50
+60
+70
+80
+90F1 Score
+(b)
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+40
+50
+60
+70
+80
+90F1 Score
+(c)
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6MAE
+(d)
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1.0
+1.1
+1.2MAE
+(e)
+0.0 0.2 0.4 0.6 0.8
+Missing Rate
+0.40
+0.45
+0.50
+0.55
+0.60
+0.65
+0.70MAE
+(f)
+P-RMF MISA MMIM ALMT LNLN HS-MoE
+Figure 3: Performance curves of various missing
+rates.(a), (b) and (c) is the F1 curves on MOSI, MO-
+SEI and SIMS. (d), (e) and (f) is the MAE curves on
+MOSI,MOSEI and SIMS.
+ditionally, we provide the 3-class accuracy (Acc-
+3), 7-class accuracy (Acc-7), and the prediction-
+human correlation (Corr) on the MOSI and MOSEI
+datasets. For the SIMS dataset, we report Acc-3,
+5-class accuracy (Acc-5), and Corr.
+4.3 Performance Comparison
+We evaluate the performance of HS-MoE under
+two scenarios: Intra-modal missingness and Inter-
+modal missingness.
+Results under Intra-Modal Missingness. On
+the MOSI and MOSEI datasets (Table 1), our
+method demonstrates superior performance across
+most metrics. Specifically, HS-MoE outperforms
+the strongest baseline, P-RMF, by approximately
+0.65% in Acc-2 and 0.33% in F1 score on MOSI.
+On the MOSEI dataset, we observe a significant
+improvement of 0.65% in Acc-2 and 1.36% in F1
+(non-negative) compared to the second-best results.
+Furthermore, our model achieves the Corr with
+human judgments, surpassing the baselines by a
+margin of roughly 1.5% to 3.0%, indicating that
+---PAGE 7---
+Table 3: Comparison of overall performance on MOSI and MOSEI under inter-modal missingness.
+Dataset Model Testing Condition
+{t} {a} {v} {t, a} {t, v} {a, v} {t, a, v}
+MOSI
+Self-MM 67.80 40 .95 38 .52 69 .81 74 .97 47 .12 84 .64 60 .54
+CubeMLP 64.15 38 .91 43 .24 63 .76 65 .12 47 .92 84 .57 58 .24
+DMD 68.97 43 .33 42 .26 70 .51 68 .45 50 .47 84 .50 61 .21
+MCTN 75.21 59 .25 58 .57 77 .81 74 .82 64 .21 80 .12 70 .00
+TransM 77.64 63 .57 56 .48 82 .07 80 .90 67 .24 82 .57 72 .92
+SMIL 78.26 67 .69 59 .67 79 .82 79 .15 71 .24 82 .85 74 .10
+GCNet 80.91 65 .07 59 .67 84.73 83.58 70 .02 83 .20 75 .31
+CorrKD 81.20 66 .52 60 .72 83 .56 82 .41 73.74 83.94 76 .01
+P-RMF 81.36 71 .44 70 .32 82 .10 81 .94 73 .11 84 .37 77 .81
+HS-MoE 83.56 73.23 71.31 83.71 83.86 73.23 85.18 79.15
+MOSEI
+Self-MM 71.53 43 .57 37 .61 75 .91 74 .62 49 .52 83 .69 62 .35
+CubeMLP 67.52 39 .54 32 .58 71 .69 70 .06 48 .54 83 .17 59 .01
+DMD 70.26 46 .18 39 .84 74 .78 72 .45 52 .70 84 .78 63 .00
+MCTN 75.50 62 .72 59 .46 76 .64 77 .13 64 .84 81 .75 71 .15
+TransM 77.98 63 .68 58 .67 80 .46 78 .61 62 .24 81 .48 71 .87
+SMIL 76.57 65 .96 60 .57 77 .68 76 .24 66 .87 80 .74 72 .09
+GCNet 80.52 66 .54 61 .83 81 .96 81 .15 69 .21 82 .35 74 .79
+CorrKD 80.76 66 .09 62 .30 81 .74 81 .28 71 .92 82 .16 75 .18
+P-RMF 81.91 75.91 73.19 84.61 85 .17 76.88 85.48 80 .45
+HS-MoE 85.34 75.59 72 .78 85.16 85.75 76.69 85.79 81.04
+Table 4: Ablation experiments on MOSI.
+Model Acc-2 F1 Acc-5 Acc-7 MAE Corr
+w/o HDS 68.21/69.85 68.10/69.75 36.15 32.81 1.1228 0.4956
+w/o SRMoE 65.45/67.10 65.30/67.05 34.82 31.56 1.2530 0.4215
+w/o ER 70.10/71.60 70.05/71.55 37.84 34.11 1.0851 0.5171
+HS-MoE 71.97/73.46 71.94/73.39 39.52 35.42 1.0365 0.5397
+our predictions align more closely with human sen-
+timent perception even when data is incomplete.
+For the SIMS dataset (Table 2), HS-MoE maintains
+a competitive edge. We achieve the best perfor-
+mance in Acc-2, Acc-5, and Corr, exceeding the
+baselines by 0.36% to 1.9%. While LNLN achieves
+a slightly higher F1 score, our method leads in clas-
+sification accuracy and regression correlation, sug-
+gesting a more balanced capability in handling the
+fine-grained sentiment annotations typical of the
+SIMS dataset.
+Results under Inter-Modal Missingness.Table
+3 presents the performance comparison under inter-
+modal missingness on MOSI and MOSEI. Our HS-
+MoE achieves the highest average accuracy across
+all missing patterns, outperforming the runner-up
+(P-RMF and CorrKD) by approximately 1.3% on
+MOSI and 0.6% on MOSEI. Notably, HS-MoE
+yields substantial gains in single-modality scenar-
+ios (e.g., {t}, {a}, {v}), improving accuracy by
+over 2% compared to existing methods. This val-
+idates the effectiveness of our feature generation
+module in recovering missing semantic informa-
+tion. However, in the specific{t, v} missing pattern
+on the MOSI dataset, our method trails GCNet by a
+narrow margin of roughly 0.15%. We hypothesize
+that this slight degradation may stem from the high
+redundancy and strong correlation between text and
+visual modalities in specific video clips, where the
+generated audio features might introduce marginal
+---PAGE 8---
+MOSI MOSEI SIMS
+Dataset
+0
+10
+20
+30
+40Percentage (%)
+39.56%
+27.65%
+32.79%
+31.86% 32.20%
+35.94%
+35.01%
+31.51%
+33.48%
+T
+V
+A
+Figure 4: Distribution of dominant modalities on MOSI,
+MOSEI, and SIMS datasets.
+noise rather than complementary information. De-
+spite this isolated case, our method consistently
+delivers the most robust overall performance.
+Performance Trend Analysis.To further investi-
+gate the model’s stability, we visualize the trend of
+MAE and F1 scores as the missing rate r increases
+from 0 to 0.9 in Fig. 3. The curves clearly show that
+while all methods suffer from performance degra-
+dation as missing rates increase, HS-MoE exhibits
+the slowest decay rate. The complete numerical re-
+sults for intra-modal and inter-modal missingness
+at various rates are provided in the Appendix A.
+4.4 Ablation Study and Analysis
+To investigate the contribution of each component
+in our HS-MoE framework, we conduct ablation
+studies on the MOSI dataset. Specifically, we re-
+move or modify three key components: the Hierar-
+chical Distribution Smoothing (HDS), the Sparse
+Routing Mixture-of-Experts (SRMoE), and the Ex-
+pert Reconstruction (ER).
+As shown in 4,removing different modules of
+HS-MoE leads to a decrease in overall perfor-
+mance.Specifically,The results demonstrate that re-
+moving the SRMoE module leads to the most se-
+vere performance degradation among all variants,
+with the correlation coefficient dropping sharply
+from 0.5397 to 0.4215 and the F1 score decreas-
+ing by over 6. This substantial decline confirms
+that SRMoE serves as the core component for cap-
+turing fine-grained multimodal interactions. The
+model without HDS exhibits the second-worst per-
+formance,highlighting the critical role of selecting
+appropriate dominant modalities across different
+scenarios. Furthermore, the removal of ER also re-
+sults in a noticeable performance drop, indicating
+its contribution to the model’s overall robustness.
+To further understand the resource allocation
+/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000013/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000014/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000015/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000016/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000017/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000018/uni00000028/uni0000005b/uni00000053/uni00000048/uni00000055/uni00000057/uni00000003/uni00000019
+/uni00000030/uni00000032/uni00000036/uni0000002c/uni00000003/uni00000027/uni00000044/uni00000057/uni00000044/uni00000056/uni00000048/uni00000057
+/uni00000013/uni00000011/uni00000013/uni0000001a/uni00000018
+/uni00000013/uni00000011/uni00000014/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000014/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000014/uni00000018/uni00000013
+/uni00000013/uni00000011/uni00000014/uni0000001a/uni00000018
+/uni00000013/uni00000011/uni00000015/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni0000003a/uni00000048/uni0000004c/uni0000004a/uni0000004b/uni00000057/uni00000003/uni00000027/uni0000004c/uni00000056/uni00000057/uni00000055/uni0000004c/uni00000045/uni00000058/uni00000057/uni0000004c/uni00000052/uni00000051/uni00000003
+Figure 5: Distribution of experts’ weight on MOSI.
+mechanism of the model, we visualize the domi-
+nant modality distribution across various datasets
+and the expert weight distribution on the MOSI
+dataset in Figs. 4 and 5.
+5 Conclusion
+This paper proposes a Hierarchical dominant-
+modality Selection with Shapley Routing Mixture-
+of-Experts (HS-MoE) framework, designed to si-
+multaneously address MSA tasks characterized
+by both uniform and non-uniform distributions of
+modality importance. By dynamically adjusting the
+contribution of each modality across diverse scenar-
+ios, HS-MoE effectively enhances the utilization
+of the dominant modality. This mechanism renders
+our model more effective and generic across three
+popular MSA benchmark datasets. Finally, we con-
+duct ablation studies to analyze this phenomenon
+and validate the contribution of each component.
+Limitations
+Despite the promising performance of HS-MoE,
+several limitations remain to be addressed.The em-
+ployment of multiple experts combined with the
+Shapley value-based routing mechanism inevitably
+increases the computational cost and inference la-
+tency compared to simple fusion baselines. While
+effective, the calculation of Shapley values intro-
+duces additional overhead that may hinder deploy-
+ment in resource-constrained environments.In ad-
+dition,the effectiveness of the HDS relies heavily
+on the quality of modality-specific features. In
+scenarios with extreme noise or severe missing
+modalities where the dominant signal is ambigu-
+ous, the selector might struggle to assign accurate
+weights, potentially affecting the downstream fu-
+sion performance.In future work, we plan to ex-
+plore lightweight approximation methods for the
+routing mechanism and investigate adaptive expert
+pruning to improve scalability.
+---PAGE 9---
+References
+Tadas Baltrusaitis, Amir Zadeh, Yao Chong Lim, and
+Louis-Philippe Morency. 2018. Openface 2.0: Facial
+behavior analysis toolkit. In 2018 13th IEEE In-
+ternational Conference on Automatic Face Gesture
+Recognition (FG 2018), pages 59–66.
+Huilin Chen, Miaomiao Cai, Fan Liu, Zhiyong Cheng,
+Richang Hong, and Meng Wang. 2025. I3-mrec:
+Invariant learning with information bottleneck for
+incomplete modality recommendation. In Proceed-
+ings of the 33rd ACM International Conference on
+Multimedia, pages 6133–6142.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2019. Bert: Pre-training of deep
+bidirectional transformers for language understand-
+ing. In Proceedings of the 2019 conference of the
+North American chapter of the association for com-
+putational linguistics: human language technologies,
+volume 1 (long and short papers), pages 4171–4186.
+Wei Han, Hui Chen, Alexander F. Gelbukh, Amir
+Zadeh, Louis-Philippe Morency, and Soujanya Poria.
+2021. Bi-bimodal modality fusion for correlation-
+controlled multimodal sentiment analysis. In ICMI
+’21: International Conference on Multimodal Interac-
+tion, pages 6–15.
+Devamanyu Hazarika, Roger Zimmermann, and Sou-
+janya Poria. 2020. Misa: Modality-invariant and-
+specific representations for multimodal sentiment
+analysis. In MM ’20: The 28th ACM International
+Conference on Multimedia, pages 1122–1131.
+Jiehui Huang, Jun Zhou, Zhenchao Tang, Jiay-
+ing Lin, and Calvin Yu-Chian Chen. 2024.
+Tmbl: Transformer-based multimodal binding learn-
+ing model for multimodal sentiment analysis.
+Knowledge-Based Systems, 285:111346.
+Praneeta Immadisetty, Pooja Rajesh, Akshita Gupta,
+Dr Anala MR, Dr Soumya A, and Dr KN Subra-
+manya. 2025. Multimodality in online education: A
+comparative study. Multimedia Tools and Applica-
+tions, 84(28):33685–33718.
+Ramandeep Kaur and Sandeep Kautish. 2022. Multi-
+modal sentiment analysis: A survey and comparison.
+Research Anthology on Implementing Sentiment Anal-
+ysis Across Multiple Disciplines, pages 1846–1870.
+Diederik P Kingma and Jimmy Ba. 2014. Adam: A
+method for stochastic optimization. arXiv preprint
+arXiv:1412.6980.
+Xiang Li, Xianfu Cheng, Dezhuang Miao, Xiaoming
+Zhang, and Zhoujun Li. 2025. Tf-mamba: Text-
+enhanced fusion mamba with missing modalities for
+robust multimodal sentiment analysis. arXiv preprint
+arXiv:2505.14329.
+Zheng Lian, Lan Chen, Licai Sun, Bin Liu, and Jian-
+hua Tao. 2022. Gcnet: Graph completion network
+for incomplete multimodal learning in conversation.
+IEEE Transactions on Pattern Analysis and Machine
+Intelligence.
+Zhizhong Liu, Bin Zhou, Dianhui Chu, Yuhang Sun, and
+Lingqiang Meng. 2024. Modality translation-based
+multimodal sentiment analysis under uncertain miss-
+ing modalities. Information Fusion, 101:101973.
+Zhun Liu, Ying Shen, Varun Bharadhwaj Lakshmi-
+narasimhan, Paul Pu Liang, Amir Zadeh, and Louis-
+Philippe Morency. 2018. Efficient low-rank mul-
+timodal fusion with modality-specific factors. In
+Proceedings of the 56th Annual Meeting of the As-
+sociation for Computational Linguistics (Volume 1:
+Long Papers), pages 2247–2256.
+Wei Luo, Mengying Xu, and Hanjiang Lai. 2023. Multi-
+modal reconstruct and align net for missing modality
+problem in sentiment analysis. In MultiMedia Mod-
+eling: 29th International Conference, MMM 2023 ,
+pages 411–422. Springer-Verlag.
+Liangdi Ma, Hengrui Liang, Yuwei He, Wei Wang,
+Zeping Yan, Wuchao Li, Rongpin Wang, Yongyi
+Li, Yuerong Lizhu, Yaou Liu, and 1 others. 2025.
+A vision–language pretrained transformer for versa-
+tile clinical respiratory disease applications. Nature
+Biomedical Engineering, pages 1–19.
+Brian McFee, Colin Raffel, Dawen Liang, Daniel PW
+Ellis, Matt McVicar, Eric Battenberg, Oriol Nieto,
+and 1 others. 2015. librosa: Audio and music signal
+analysis in python. SciPy, 2015(18-24):7.
+Adam Paszke, Sam Gross, Soumith Chintala, Gregory
+Chanan, Edward Yang, Zachary DeVito, Zeming Lin,
+Alban Desmaison, Luca Antiga, and Adam Lerer.
+2017. Automatic differentiation in pytorch.
+Peng Shi, Jin Wang, and Xuejie Zhang. 2025. Language-
+dominated fusion and self-distillation for multimodal
+sentiment analysis with incomplete modalities. Pat-
+tern Recognition, page 112644.
+Hao Sun, Hongyi Wang, Jiaqing Liu, Yen-Wei Chen,
+and Lanfen Lin. 2022. Cubemlp: An mlp-based
+model for multimodal sentiment analysis and depres-
+sion estimation. In MM ’22: The 30th ACM Interna-
+tional Conference on Multimedia, pages 3722–3729.
+Yao-Hung Hubert Tsai, Shaojie Bai, Paul Pu Liang,
+J. Zico Kolter, Louis-Philippe Morency, and Rus-
+lan Salakhutdinov. 2019. Multimodal transformer
+for unaligned multimodal language sequences. In
+Proceedings of the 57th Annual Meeting of the Asso-
+ciation for Computational Linguistics, pages 6558–
+6569, Florence, Italy. Association for Computational
+Linguistics.
+Di Wang, Xutong Guo, Yumin Tian, Jinhui Liu, LiHuo
+He, and Xuemei Luo. 2023a. Tetfn: A text enhanced
+transformer fusion network for multimodal sentiment
+analysis. Pattern Recognition, 136:109259.
+---PAGE 10---
+Di Wang, Shuai Liu, Quan Wang, Yumin Tian, Lihuo
+He, and Xinbo Gao. 2022. Cross-modal enhance-
+ment network for multimodal sentiment analysis.
+IEEE Transactions on Multimedia.
+Yuanzhi Wang, Zhen Cui, and Yong Li. 2023b.
+Distribution-consistent modal recovering for incom-
+plete multimodal learning. In 2023 IEEE/CVF In-
+ternational Conference on Computer Vision (ICCV),
+pages 21968–21977.
+Zilong Wang, Zhaohong Wan, and Xiaojun Wan. 2020.
+Transmodality: An end2end fusion method with
+transformer for multimodal sentiment analysis. In
+Proceedings of The Web Conference 2020 , pages
+2514–2520. Association for Computing Machinery.
+Duidi Wu, Pai Zheng, Qianyou Zhao, Shuo Zhang, Jin
+Qi, Jie Hu, Guo-Niu Zhu, and Lihui Wang. 2026. Em-
+powering natural human–robot collaboration through
+multimodal language models and spatial intelligence:
+Pathways and perspectives. Robotics and Computer-
+Integrated Manufacturing, 97:103064.
+Huangbiao Xu, Huanqi Wu, Xiao Ke, Junyi Wu, Rui Xu,
+and Jinglin Xu. 2026. Mcmoe: Completing missing
+modalities with mixture of experts for incomplete
+multimodal action quality assessment. In Proceed-
+ings of the AAAI Conference on Artificial Intelligence,
+volume 40, pages 11241–11249.
+Zhihao Yang, Qing He, Minghao Yu, Nisuo Du, and Yi-
+jie Lu. 2026. Tctr: Text-guided contrastive learning
+with token-level reconstruction network for missing
+modalities in multimodal sentiment analysis. Infor-
+mation Fusion, 126:103571.
+Wenmeng Yu, Hua Xu, Fanyang Meng, Yilin Zhu,
+Yixiao Ma, Jiele Wu, Jiyun Zou, and Kaicheng
+Yang. 2020. Ch-sims: A chinese multimodal sen-
+timent analysis dataset with fine-grained annotation
+of modality. In Proceedings of the 58th annual meet-
+ing of the association for computational linguistics,
+pages 3718–3727.
+Wenmeng Yu, Hua Xu, Ziqi Yuan, and Jiele Wu. 2021.
+Learning modality-specific representations with self-
+supervised multi-task learning for multimodal senti-
+ment analysis. In Proceedings of the AAAI Confer-
+ence on Artificial Intelligence, pages 10790–10797.
+Ziqi Yuan, Yihe Liu, Hua Xu, and Kai Gao. 2024. Noise
+imitation based adversarial training for robust mul-
+timodal sentiment analysis. IEEE Transactions on
+Multimedia, 26:529–539.
+Amir Zadeh, Minghai Chen, Soujanya Poria, Erik Cam-
+bria, and Louis-Philippe Morency. 2017. Tensor
+fusion network for multimodal sentiment analysis.
+In Proceedings of the 2017 Conference on Empiri-
+cal Methods in Natural Language Processing, pages
+1103–1114.
+Amir Zadeh, Paul Pu Liang, Navonil Mazumder,
+Soujanya Poria, Erik Cambria, and Louis-Philippe
+Morency. 2018a. Memory fusion network for multi-
+view sequential learning. Proceedings of the Thirty-
+Second AAAI Conference on Artificial Intelligence.
+Amir Zadeh, Rowan Zellers, Eli Pincus, and Louis-
+Philippe Morency. 2016. Multimodal sentiment in-
+tensity analysis in videos: Facial gestures and verbal
+messages. IEEE Intelligent Systems, 31(6):82–88.
+AmirAli Bagher Zadeh, Paul Pu Liang, Soujanya Poria,
+Erik Cambria, and Louis-Philippe Morency. 2018b.
+Multimodal language analysis in the wild: Cmu-
+mosei dataset and interpretable dynamic fusion graph.
+In Proceedings of the 56th Annual Meeting of the As-
+sociation for Computational Linguistics (Volume 1:
+Long Papers), pages 2236–2246.
+Jiandian Zeng, Tianyi Liu, and Jiantao Zhou. 2022. Tag-
+assisted multimodal sentiment analysis under uncer-
+tain missing modalities. In Proceedings of the 45th
+International ACM SIGIR Conference on Research
+and Development in Information Retrieval , pages
+1545–1554. Association for Computing Machinery.
+Ying Zeng, Sijie Mai, and Haifeng Hu. 2021. Which is
+making the contribution: Modulating unimodal and
+cross-modal dynamics for multimodal sentiment anal-
+ysis. Findings of the Association for Computational
+Linguistics: EMNLP 2021, pages 1262–1274.
+Haoyu Zhang, Wenbin Wang, and Tianshu Yu. 2024.
+Towards robust multimodal sentiment analysis with
+incomplete data. Advances in Neural Information
+Processing Systems, 37:55943–55974.
+Haoyu Zhang, Yu Wang, Guanghao Yin, Kejun Liu,
+Yuanyuan Liu, and Tianshu Yu. 2023. Learning
+language-guided adaptive hyper-modality representa-
+tion for multimodal sentiment analysis. In Proceed-
+ings of the 2023 Conference on Empirical Methods
+in Natural Language Processing, pages 756–767.
+Jinming Zhao, Ruichen Li, and Qin Jin. 2021. Missing
+modality imagination network for emotion recogni-
+tion with uncertain missing modalities. In Proceed-
+ings of the 59th Annual Meeting of the Association for
+Computational Linguistics and the 11th International
+Joint Conference on Natural Language Processing,
+pages 2608–2618. Association for Computational
+Linguistics.
+Aoqiang Zhu, Min Hu, Xiaohua Wang, Jiaoyun Yang,
+Yiming Tang, and Ning An. 2025. Proxy-driven ro-
+bust multimodal sentiment analysis with incomplete
+data. In Proceedings of the 63rd Annual Meeting of
+the Association for Computational Linguistics (Vol-
+ume 1: Long Papers), pages 22123–22138.
+A Evaluation results of HS-MoE
+---PAGE 11---
+Table 5: Evaluation results of HS-MoE under intra-modal missingness on the MOSI dataset.
+Missing Rate r MOSI
+Acc-2 F1 Acc-5 Acc-7 MAE Corr
+0.0 0.8294 / 0.8537 0.8292 / 0.8518 0.5233 0.4606 0.7121 0.7940
+0.1 0.8003 / 0.8216 0.8001 / 0.8193 0.5102 0.4534 0.7804 0.7524
+0.2 0.7813 / 0.8003 0.7810 / 0.7981 0.4694 0.4125 0.8552 0.6905
+0.3 0.7726 / 0.7912 0.7726 / 0.7899 0.4490 0.3980 0.9137 0.6494
+0.4 0.7536 / 0.7698 0.7519 / 0.7690 0.4227 0.3732 0.9680 0.6172
+0.5 0.7128 / 0.7287 0.7113 / 0.7278 0.3819 0.3455 1.0633 0.5499
+0.6 0.6837 / 0.6951 0.6828 / 0.6953 0.3528 0.3236 1.1554 0.4766
+0.7 0.6633 / 0.6723 0.6630 / 0.6730 0.3178 0.2886 1.2297 0.3861
+0.8 0.6181 / 0.6265 0.6191 / 0.6288 0.2843 0.2595 1.3272 0.2958
+0.9 0.5816 / 0.5869 0.5827 / 0.5863 0.2405 0.2274 1.3604 0.1847
+Avg. 0.7197 / 0.7346 0.7194 / 0.7339 0.3952 0.3542 1.0365 0.5397
+Table 6: Evaluation results of HS-MoE under intra-modal missingness on the MOSEI dataset.
+Missing Rate r MOSI
+Acc-2 F1 Acc-5 Acc-7 MAE Corr
+0.0 0.8454 / 0.8605 0.8377 / 0.8630 0.5445 0.5304 0.5397 0.7710
+0.1 0.8377 / 0.8492 0.8314 / 0.8516 0.5336 0.5205 0.5588 0.7514
+0.2 0.8280 / 0.8415 0.8297 / 0.8430 0.5222 0.5093 0.5780 0.7280
+0.3 0.8113 / 0.8220 0.8132 / 0.8236 0.5018 0.4917 0.6124 0.6850
+0.4 0.8012 / 0.8110 0.7920 / 0.8110 0.4896 0.4782 0.6294 0.6592
+0.5 0.7864 / 0.7914 0.7893 / 0.7926 0.4686 0.4602 0.6661 0.6048
+0.6 0.7699 / 0.7672 0.7869 / 0.7669 0.4561 0.4488 0.6968 0.5541
+0.7 0.7488 / 0.7347 0.7810 / 0.7451 0.4430 0.4402 0.7331 0.4849
+0.8 0.7396 / 0.7130 0.7776 / 0.7261 0.4325 0.4299 0.7645 0.4194
+0.9 0.7248 / 0.6794 0.7646 / 0.7176 0.4173 0.4158 0.7978 0.3188
+Avg. 0.7893 / 0.7870 0.8003 / 0.7941 0.4809 0.4725 0.6577 0.5977
+Table 7: Evaluation results of HS-MoE under intra-modal missingness on the SIMS dataset.
+Missing Rate r SIMS
+Acc-2 F1 Acc-3 Acc-5 MAE Corr
+0.0 0.7899 0.8047 0.6024 0.3917 0.4489 0.5554
+0.1 0.7715 0.7926 0.5949 0.3742 0.4650 0.5165
+0.2 0.7615 0.7758 0.5914 0.3785 0.4654 0.5013
+0.3 0.7552 0.7653 0.5792 0.3610 0.4735 0.4882
+0.4 0.7580 0.7513 0.5605 0.3688 0.4709 0.4730
+0.5 0.7424 0.7473 0.5405 0.3520 0.4957 0.4656
+0.6 0.7302 0.7315 0.5427 0.3435 0.5101 0.4029
+0.7 0.7237 0.7260 0.5205 0.3226 0.5401 0.3764
+0.8 0.6937 0.7033 0.5027 0.3176 0.5893 0.2776
+0.9 0.6737 0.6884 0.4727 0.2904 0.6008 0.1657
+Avg. 0.7400 0.7486 0.5508 0.3500 0.5060 0.4223
+---PAGE 12---
+Table 8: Evaluation results of HS-MoE under inter-modal missingness on the MOSI dataset.
+Testing Condition MOSI
+Acc-2 F1 Acc-5 Acc-7 MAE Corr
+{t} 0.8192 / 0.8354 0.8199 / 0.8356 0.5073 0.4363 0.7456 0.7654
+{a} 0.5525 / 0.5747 0.7232 / 0.7323 0.2001 0.1906 1.3623 0.1185
+{v} 0.5501 / 0.5777 0.7132 / 0.7131 0.1947 0.2045 1.3818 0.1005
+{t, a} 0.8207 / 0.8369 0.8204 / 0.8371 0.5087 0.4334 0.7495 0.7759
+{t, v} 0.8222 / 0.8384 0.8213 / 0.8386 0.5102 0.4363 0.7455 0.7756
+{a, v} 0.5615 / 0.5887 0.7232 / 0.7323 0.2047 0.2091 1.3621 0.2251
+{t, a, v} 0.8222 / 0.8537 0.8218 / 0.8518 0.5204 0.4450 0.7487 0.7861
+Avg. 0.6926 / 0.7293 0.7726 / 0.7915 0.3780 0.3364 0.9565 0.5067
+Table 9: Evaluation results of HS-MoE under inter-modal missingness on the MOSEI dataset.
+Testing Condition MOSEI
+Acc-2 F1 Acc-5 Acc-7 MAE Corr
+{t} 0.8392 / 0.8547 0.8312 / 0.8534 0.5325 0.5073 0.5416 0.7660
+{a} 0.7102 / 0.6285 0.8296 / 0.7559 0.4136 0.4136 0.8353 0.2091
+{v} 0.7051 / 0.6357 0.8199 / 0.7278 0.4151 0.4151 0.8218 0.2104
+{t, a} 0.8425 / 0.8536 0.8366 / 0.8516 0.5362 0.5137 0.5438 0.7664
+{t, v} 0.8425 / 0.8599 0.8353 / 0.8575 0.5405 0.5259 0.5365 0.7708
+{a, v} 0.7096 / 0.6381 0.8296 / 0.7669 0.4151 0.4153 0.8177 0.2384
+{t, a, v} 0.8433 / 0.8599 0.8377 / 0.8579 0.5445 0.5204 0.5397 0.7710
+Avg. 0.7846 / 0.7615 0.8314 / 0.8104 0.4854 0.4716 0.6623 0.5046
+Table 10: Evaluation results of HS-MoE under inter-modal missingness on the SIMS dataset.
+Testing Condition SIMS
+Acc-2 F1 Acc-3 Acc-5 MAE Corr
+{t} 0.7790 0.8086 0.6095 0.3861 0.4369 0.3410
+{a} 0.6937 0.8182 0.5405 0.2188 0.5777 0.1523
+{v} 0.6936 0.8172 0.5426 0.2122 0.6016 0.0600
+{t, a} 0.7717 0.7930 0.6083 0.3816 0.4387 0.3564
+{t, v} 0.7837 0.7852 0.6005 0.3885 0.4477 0.3515
+{a, v} 0.6915 0.8171 0.5339 0.2144 0.5831 0.1204
+{t, a, v} 0.7968 0.7937 0.6136 0.3916 0.5445 0.3553
+Avg. 0.7443 0.8047 0.5784 0.3133 0.5186 0.2481
